@@ -39,10 +39,10 @@ class Task(models.Model):
     class Meta:
         ordering = ["duedate"]
         indexes = [
-            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["content_type", "                                                                                                            "]),
             models.Index(fields=["company", "status"]),
         ]
 
     def clean(self):
-        if self.related_models and self.related_models.company != self.company:
+        if self.related_object and self.related_object.company != self.company:
             raise ValidationError("Related object must belong to the same company")
