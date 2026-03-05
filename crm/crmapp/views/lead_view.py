@@ -18,8 +18,9 @@ from ..services.lead_service import (
     ContactAlreadyExistsException
 )
 from ..models.lead import Lead
+from ..decorators import login_is_required
 
-
+@login_is_required
 @csrf_exempt
 def get_all_leads(request):
     if request.method != "GET":
@@ -45,7 +46,7 @@ def get_all_leads(request):
 
     return JsonResponse({"leads": data})
 
-
+@login_is_required
 @csrf_exempt
 def create_lead(request):
     if request.method != "POST":
@@ -79,7 +80,7 @@ def create_lead(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
-
+@login_is_required
 @csrf_exempt
 def update_lead(request, pk):
     if request.method != "POST":
@@ -113,6 +114,7 @@ def update_lead(request, pk):
 
     return JsonResponse({"message": "Lead updated successfully"})
 
+@login_is_required
 @csrf_exempt
 def delete_lead(request, pk):
     if request.method != "DELETE":
@@ -133,7 +135,7 @@ def delete_lead(request, pk):
 
     return JsonResponse({"message": "Lead archived successfully"})
 
-
+@login_is_required
 @csrf_exempt
 def get_lead_by_id(request, pk):
     if request.method != "GET":
@@ -158,15 +160,15 @@ def get_lead_by_id(request, pk):
         "status": lead.status
     })
 
-
+@login_is_required
 @csrf_exempt
 def reactivate_lead(request):
     return JsonResponse({"error": "This function is still in hold and in progress"})
 
-
+@login_is_required
 @csrf_exempt
 @role_required(["admin", "manager"])
-def converting_lead(request, pk):
+def converting_lead(request, pk):   # ON-HOLD IN-PROGRESS
     if request.method != "POST":
         return JsonResponse({"error": "POST request required"}, status=405)
     

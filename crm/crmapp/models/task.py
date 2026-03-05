@@ -30,7 +30,9 @@ class Task(models.Model):
         ("in-progress", "In-progress"),
         ("completed", "Completed"),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICE, default="pending", db_index=True)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICE, default="pending", db_index=True
+    )
     duedate = models.DateField(db_index=True)
     attachement = models.URLField(blank=True, null=True)
     description = models.TextField()
@@ -39,7 +41,7 @@ class Task(models.Model):
     class Meta:
         ordering = ["duedate"]
         indexes = [
-            models.Index(fields=["content_type", "                                                                                                            "]),
+            models.Index(fields=["content_type", "object_id"]),
             models.Index(fields=["company", "status"]),
         ]
 

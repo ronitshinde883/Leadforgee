@@ -7,7 +7,7 @@ from django.contrib.auth import authenticate
 import json
 from ..models.common import Company
 from ..models.user import Userprofile
-from ..decorators import role_required
+from ..decorators import role_required, login_is_required
 
 """
 1. IF IS_ACTIVE FIELD IS FALSE THEN DO NOT PERFORM COMPANY ACTIONS
@@ -15,7 +15,7 @@ from ..decorators import role_required
 3. ADD PASSWORD CONFIRMATION AND EMAIL VERIFICATION DURING COMPANY EDITING
 """
 
-
+@login_is_required
 @csrf_exempt
 def get_all_users(request):
     if request.method != "GET":
@@ -37,9 +37,9 @@ def get_all_users(request):
 
     return JsonResponse({"message": "Company users fetched successfully", "data": data})
 
-
-@csrf_exempt
+@login_is_required
 @require_http_methods(["GET"])
+@csrf_exempt
 def get_company(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET method required"})
@@ -59,9 +59,9 @@ def get_company(request):
         }
     )
 
-
-@csrf_exempt
+@login_is_required
 @role_required(["admin"])
+@csrf_exempt
 def update_company(request):
     if not request.method != "PATCH":
         return JsonResponse({"error": "PATCH request required"}, status=405)
@@ -81,9 +81,9 @@ def update_company(request):
 
     return JsonResponse({"message": "Updated company details successfully"})
 
-
-@csrf_exempt
+@login_is_required
 @role_required(["admin"])
+@csrf_exempt
 def delete_company(request):
     if request.method != "DELETE":
         return JsonResponse({"error": "DELETE request required"}, status=405)
@@ -110,9 +110,9 @@ def delete_company(request):
 
     return JsonResponse({"message": "Company soft deleted successfully"})
 
-
-@csrf_exempt
+@login_is_required
 @role_required(["admin"])
+@csrf_exempt
 def reactivate_company(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST request required"}, status=405)

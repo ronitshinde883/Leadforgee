@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
 from django.contrib.auth import authenticate, login, logout
-from ..decorators import role_required
+from ..decorators import role_required, login_is_required
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from ..models.common import Company
@@ -169,6 +169,7 @@ def login_user(request):
 
 
 # GETS CURRENT USER
+@login_is_required
 @csrf_exempt  # TEMP
 def get_current_user(request):
     if request.method != "GET":
@@ -190,6 +191,7 @@ def get_current_user(request):
 
 
 # LOGOUT FOR ALL USERS
+@login_is_required
 @csrf_exempt
 def logout_user(request):
     if request.method != "POST":
@@ -203,8 +205,8 @@ def logout_user(request):
     return JsonResponse({"message": "User logged out successfully"}, status=200)
 
 
-@csrf_exempt
 @role_required(["admin", "manager"])
+@csrf_exempt
 def delete_user(request, user_id):
     if request.method != "DELETE":
         return JsonResponse({"error": "DELETE request required"}, status=405)
@@ -237,8 +239,8 @@ def delete_user(request, user_id):
     return JsonResponse({"message": "User soft deleted successfully"})
 
 
-@csrf_exempt  # TEMPORARY
 @role_required(["admin"])
+@csrf_exempt  # TEMPORARY
 def reactivate_user(request, user_id):
     if request.method != "POST":
         return JsonResponse({"error": "POST request required"}, status=405)
@@ -274,8 +276,8 @@ def reactivate_user(request, user_id):
     )
 
 
-@csrf_exempt
 @role_required(["admin"])
+@csrf_exempt
 def change_roles(request, user_id):
     if request.method != "POST":
         return JsonResponse({"error": "POST request required"}, status=405)
@@ -315,9 +317,9 @@ def change_roles(request, user_id):
         }
     )
 
-
-@csrf_exempt
+@login_is_required
 @require_http_methods(["POST"])
+@csrf_exempt
 def change_password(request):
 
     if not request.user.is_authenticated:
