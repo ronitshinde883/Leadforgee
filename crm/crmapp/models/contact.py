@@ -16,8 +16,7 @@ class Contact(models.Model):
         related_name="owned_contacts",
     )
 
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100)
     email = models.EmailField(db_index=True)
     phone = models.CharField(max_length=15, blank=True)
 
