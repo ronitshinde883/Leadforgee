@@ -138,6 +138,11 @@ def update_task(request,task_id):
       if status:
         task.status=status 
       
+    allowed_fields = ["description", "duedate", "status", "assigned_to_id"]
+
+    for field in allowed_fields:
+        if field in data:
+            setattr(task, field, data[field])
       if assigned_to_id is not None:
         if assigned_to_id=="":
           task.assignedTo=None #this will work when user will erase the old assigned person and enters nothing 
