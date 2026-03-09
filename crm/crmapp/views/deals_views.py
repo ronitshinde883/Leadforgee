@@ -5,12 +5,13 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from ..models.common import Company
 from ..models.user import Userprofile
-from django.shortcuts import render, redirect
-from .auth_views import login_user
 from ..models.deal import Deal
 from ..models.contact import Contact
 from ..decorators import login_is_required, role_required
 
+"""
+    SWITCHING TOO DRF AND CLASS-BASED VIEWS
+"""
 
 @login_is_required
 @csrf_exempt

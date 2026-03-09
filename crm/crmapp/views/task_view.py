@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -12,8 +13,20 @@ from django.contrib.contenttypes.models import ContentType
 import json
 from django.contrib.auth.models import User
 from django.utils.dateparse import parse_date
+=======
+from ..models.task import Task
+from django.contrib.contenttypes.models import ContentType
+>>>>>>> f151a956b9d45ab36ba55c2f8f4e44255deb6d96
 
+"""
+    SWITCHING TOO DRF AND CLASS-BASED VIEWS
+"""
+from rest_framework.viewsets import ModelViewSet
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
 
+<<<<<<< HEAD
 @csrf_exempt
 def get_all_tasks(request):
     if request.method != 'POST':
@@ -39,6 +52,131 @@ def get_all_tasks(request):
       
 
 
+=======
+from ..serializers.task_serializers import TaskSerializer
+from ..utils.disable_csrf import CsrfExemptSessionAuthentication
+
+# TASK VIEWS
+class TaskViewSet(ModelViewSet):
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = TaskSerializer
+    lookup_field = "id"
+
+    # filtering fields (LATER)
+    filterset_fields = ["status"]
+    search_fields = ["title"]
+    ordering_fields = ["duedate", "created_at"]
+
+    def get_queryset(self):
+        user = self.request.user
+        company = user.userprofile.company
+        return (
+            Task.objects
+                .filter(company=company)
+                .select_related("assigned_by", "company")
+        )
+    
+    # GET /api/tasks/
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    # GET /api/tasks/{id}
+    def retrieve(self, request, id=None):
+        user = request.user
+        company = user.userprofile.company
+
+        try:
+            task = Task.objects.get(id=id, company=company)
+        except Task.DoesNotExist:
+            return Response({"error": "Task does not exists"}, status=404)
+        
+        serializer = TaskSerializer(task)
+
+        return Response({
+            "message": "Fetched task successfully",
+            "task": serializer.data
+            # "assignedTo": task.assigned_to.username
+        }, status=200)
+
+    # POST /api/tasks/
+    def create(self, request):
+        user = request.user
+        company = user.userprofile.company
+
+        related_model = self.request.data.get("related_model")
+        related_id = self.request.data.get("related_id")
+
+        content_type = ContentType.objects.get(
+            app_label="crmapp",
+            model=related_model
+        )
+
+        serializer = TaskSerializer(data=request.data)
+
+        if serializer.is_valid():
+            task = serializer.save(assigned_by=user, company=company, content_type=content_type, object_id=related_id, status="pending")
+        
+            return Response(
+                {
+                    "message": "Created task successfully",
+                    "task_id": task.id
+                },
+                status=201
+            )
+        
+        return Response(serializer.errors, status=400)
+
+    # PATCH /api/tasks/{id}
+    def partial_update(self, request, id=None):
+        user = request.user
+        company = user.userprofile.company
+
+        try:
+            task = Task.objects.get(id=id, company=company)
+        except Task.DoesNotExist:
+            return Response({
+                "error": "Lead does not exists"
+            }, status=404)
+        
+        serializer = TaskSerializer(task, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Task updated successfully"})
+    
+        return Response(serializer.errors, status=400)
+    
+    # LATER
+    def update(self, request, id=None):
+        pass
+
+    # DELETE /api/tasks/{id}
+    def destroy(self, request, id=None):
+        user = request.user
+        company = user.userprofile.company
+
+        try:
+            task = Task.objects.get(id=id, company=company)
+        except Task.DoesNotExist:
+            return Response({
+                "error": "Lead does not exists"
+            }, status=404)
+        
+        task.delete()
+        
+        return Response({
+            "message": "Task deleted successfully"
+        }, status=200)
+
+
+
+
+"""
+@login_is_required
+>>>>>>> f151a956b9d45ab36ba55c2f8f4e44255deb6d96
 @csrf_exempt
 def create_task(request):
     if request.method != 'POST':
@@ -105,6 +243,7 @@ def create_task(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+<<<<<<< HEAD
 
 @csrf_exempt
 def update_task(request,task_id):
@@ -207,3 +346,6 @@ def reactivate_task(request):
   return JsonResponse({
     "error": "This function is still in hold and in progress"
   })
+=======
+"""
+>>>>>>> f151a956b9d45ab36ba55c2f8f4e44255deb6d96

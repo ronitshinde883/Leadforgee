@@ -1,5 +1,3 @@
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from ..services.lead_service import convert_lead
 from ..services.lead_service import (
     LeadAlreadyConvertedException,
@@ -21,8 +19,15 @@ from ..serializers.lead_serializers import LeadSerializer
 
 """
     1. Convert Lead
+        @action(detail=True, methods=["post"])
+        def convert:
     2. Pagination
-    3. 
+    3. Add advance filtering
+        ?value__gte=5000
+        ?created_at__gte=2025-01-01
+        ?created_at__lte=2025-12-31
+    4. permission logic
+    5. Lead statistics endpoint (api/leads/stats/)
 """
 
 class LeadViewSet(ModelViewSet):

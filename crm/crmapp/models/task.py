@@ -8,14 +8,14 @@ from .common import Company
 
 class Task(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, db_index=True)
-    assignedTo = models.ForeignKey(
+    assigned_to = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="tasks_assigned",
     )
-    assignedBy = models.ForeignKey(
+    assigned_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
@@ -35,7 +35,8 @@ class Task(models.Model):
     )
     duedate = models.DateField(db_index=True)
     attachement = models.URLField(blank=True, null=True)
-    description = models.TextField()
+    title = models.CharField(max_length=128)  # NULL TO BE REMOVED LATER
+    description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

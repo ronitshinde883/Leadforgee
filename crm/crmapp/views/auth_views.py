@@ -23,6 +23,67 @@ from ..models.user import Userprofile
   6. IF COMPANY IS_ACTIVE FIELD IS FALSE PREVENT USERS FROM LOGGING IN AND REGISTERING
 """
 
+"""
+    SWITCHING TOO DRF AND CLASS-BASED VIEWS
+"""
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
+
+from ..serializers.auth_serializers import LoginSerializer, RegisterOwnerSerializer
+from ..utils.disable_csrf import CsrfExemptSessionAuthentication
+
+class LoginView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user = serializer.validated_data["user"]
+
+        login(request, user)  # creates session
+
+        return Response(
+            {
+                "message": "Logged in successfully",
+                "user_id": user.id,
+                "name": user.username,
+            }
+        )
+
+
+class RegisterOwnerView(APIView):
+    authentication_classes=[CsrfExemptSessionAuthentication]
+
+    def post(self, request):
+        serializer = RegisterOwnerSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        
+        data = serializer.save()
+        user = data["user"]
+        company = data["company"]
+
+        return Response({
+            "message": "Company and owner created successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email
+            },
+            "company": {
+                "id": company.id,
+                "name": company.title,
+                "code": str(company.code)
+            }
+        })
+
 
 # REGISTRATION FOR COMPANY OWNERS / NEW USERS WHO CREATE COMPANY DURING REGISTRATION
 @csrf_exempt  # FOR TEMPORARY BASIC(DEV) CAN USE PROPER CSRF/AUTH
@@ -316,6 +377,7 @@ def change_roles(request, user_id):
             "role": user_change_role.userprofile.role,
         }
     )
+
 
 @login_is_required
 @require_http_methods(["POST"])

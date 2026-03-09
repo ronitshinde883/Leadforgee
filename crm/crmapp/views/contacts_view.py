@@ -6,6 +6,11 @@ from django.http import JsonResponse
 from ..models.contact import Contact
 from ..decorators import login_is_required
 
+"""
+    SWITCHING TOO DRF AND CLASS-BASED VIEWS
+"""
+
+
 @login_is_required
 @csrf_exempt
 def get_all_contacts(request):
