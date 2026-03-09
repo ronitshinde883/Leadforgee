@@ -1,192 +1,129 @@
-from django.views.generic import (
-    ListView,
-    CreateView,
-    UpdateView,
-    DeleteView,
-    DetailView,
-)
-import json
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from ..models.contact import Contact
-from ..decorators import role_required
+from django.utils.decorators import method_decorator
 from ..services.lead_service import convert_lead
 from ..services.lead_service import (
     LeadAlreadyConvertedException,
-    ContactAlreadyExistsException
+    ContactAlreadyExistsException,
 )
 from ..models.lead import Lead
-from ..decorators import login_is_required
+from ..utils.disable_csrf import CsrfExemptSessionAuthentication
 
-@login_is_required
-@csrf_exempt
-def get_all_leads(request):
-    if request.method != "GET":
-        return JsonResponse({"error": "GET request required"}, status=405)
+"""
+    SWITCHING TOO DRF AND CLASS-BASED VIEWS
+"""
+from rest_framework.viewsets import ModelViewSet
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
 
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-    
-    user = request.user
-    company = user.userprofile.company
+from ..models.lead import Lead
+from ..serializers.lead_serializers import LeadSerializer
 
-    leads = Lead.objects.filter(company=company, is_archived=False)
+"""
+    1. Convert Lead
+    2. Pagination
+    3. 
+"""
 
-    data = [
-        {
-            "id": lead.id,
-            "name": lead.name,
-            "email": lead.email,    
-            "status": lead.status
-        }
-        for lead in leads
-    ]
+class LeadViewSet(ModelViewSet):
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    # filter_backends = [DjangoFilterBackend,SearchFilter,OrderingFilter]   INTEGRATED THIS IN SETTINGS DIRECTLY
+    permission_classes = [IsAuthenticated]
+    serializer_class = LeadSerializer
+    lookup_field = "id"
 
-    return JsonResponse({"leads": data})
+    # filtering fields
+    filterset_fields = ["status", "source"]
+    search_fields = ["name", "email", "phone"]
+    ordering_fields = ["value", "created_at"]
 
-@login_is_required
-@csrf_exempt
-def create_lead(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-
-    user = request.user
-    company = user.userprofile.company
-
-    try:
-        data = json.loads(request.body)
-
-        lead = Lead.objects.create(
-            company=company,
-            owner = user,
-            name = data.get("name"),
-            email = data.get("email"),
-            phone = data.get("phone"),
-            source = data.get("source"),
-            status="new",
-            value = data.get("value"),
-            note = data.get("note")
+    def get_queryset(self):
+        user = self.request.user
+        company = user.userprofile.company
+        return (Lead.objects
+            .filter(company=company, is_archived=False)
+            .select_related("owner", "company")
         )
 
-        return JsonResponse({
-            "message": "Lead created successfully",
-            "lead_id": lead.id
-        }, status=201)
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=400)
+    # GET /api/leads/
+    def list(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
-@login_is_required
-@csrf_exempt
-def update_lead(request, pk):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
-    
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-    
-    company = request.user.userprofile.company
+    # GET /api/leads/{id}/
+    def retrieve(self, request, id=None):
+        user = request.user
+        company = user.userprofile.company
 
-    lead = get_object_or_404(
-        Lead,
-        id=pk,
-        company=company
-    )
+        try:
+            lead = Lead.objects.get(id=id, company=company, is_archived=False)
+        except Lead.DoesNotExist:
+            return Response(
+                {"error": "Lead not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-    if lead.status == "converted":
-        return JsonResponse(
-            {"error": "Converted leads cannot be edited"}, status=400
+        serializer = LeadSerializer(lead)
+        return Response(
+            {"message": "Fetched lead successfully", "lead": serializer.data}
         )
-    
-    data = json.loads(request.body)
 
-    lead.name = data.get("name", lead.name)
-    lead.email = data.get("email", lead.email)
-    lead.phone = data.get("phone", lead.phone)
-    lead.status = data.get("status", lead.status)
-    lead.value = data.get("value", lead.value)
-    lead.note = data.get("note", lead.note)
-    lead.save()
+    # POST /api/leads/
+    def create(self, request):
+        user = request.user
+        company = user.userprofile.company
 
-    return JsonResponse({"message": "Lead updated successfully"})
+        serializer = LeadSerializer(data=request.data)
 
-@login_is_required
-@csrf_exempt
-def delete_lead(request, pk):
-    if request.method != "DELETE":
-        return JsonResponse({"error": "DELETE request required"}, status=405)
-    
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-    
-    company = request.user.userprofile.company
-    lead = get_object_or_404(
-        Lead,
-        id=pk,
-        company = company
-    )
+        if serializer.is_valid():
+            lead = serializer.save(owner=user, company=company, status="new")
 
-    lead.is_archived = True
-    lead.save()
+            return Response(
+                {"message": "Created lead successfully", "lead_id": lead.id},
+                status=status.HTTP_201_CREATED,
+            )
 
-    return JsonResponse({"message": "Lead archived successfully"})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@login_is_required
-@csrf_exempt
-def get_lead_by_id(request, pk):
-    if request.method != "GET":
-        return JsonResponse({"error": "GET request required"}, status=405)
-    
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
+    # PATCH /api/leads/{id}/
+    def partial_update(self, request, id=None):
+        user = request.user
+        company = user.userprofile.company
 
-    company = request.user.userprofile.company
+        try:
+            lead = Lead.objects.get(id=id, company=company)
+        except Lead.DoesNotExist:
+            return Response(
+                {"error": "Lead not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-    lead = get_object_or_404(
-        Lead,
-        id=pk,
-        company=company
-    )
+        serializer = LeadSerializer(lead, data=request.data, partial=True)
 
-    return JsonResponse({
-        "id": lead.id,
-        "name": lead.name,
-        "email": lead.email,
-        "phone": lead.phone,
-        "status": lead.status
-    })
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Lead updated successfully"})
 
-@login_is_required
-@csrf_exempt
-def reactivate_lead(request):
-    return JsonResponse({"error": "This function is still in hold and in progress"})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@login_is_required
-@csrf_exempt
-@role_required(["admin", "manager"])
-def converting_lead(request, pk):   # ON-HOLD IN-PROGRESS
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
-    
-    data = json.loads(request.body) if request.body else {}
-    user = request.user
-
-    try:
-        create_deal = data.get("create_deal", True)
-        deal_note = data.get("note")
-
-        result = convert_lead(
-            lead_id=pk,
-            user=request.user,
-            create_deal=create_deal,
-            deal_data={"note": deal_note}
-
-        )
-    except LeadAlreadyConvertedException:
+    # PUT /api/leads/{id}/
+    def update(self, request, id=None):
         pass
-    except ContactAlreadyExistsException:
-        pass
+
+    # DELETE /api/leads/{id}/
+    def destroy(self, request, id=None):
+        user = request.user
+        company = user.userprofile.company
+
+        try:
+            lead = Lead.objects.get(id=id, company=company, is_archived=False)
+        except Lead.DoesNotExist:
+            return Response(
+                {"error": "Lead not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        lead.is_archived = True
+        lead.save()
+
+        return Response(
+            {"message": "Lead delete successfully"}, status=status.HTTP_200_OK
+        )
