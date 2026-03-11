@@ -31,8 +31,15 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
-from ..serializers.auth_serializers import LoginSerializer, RegisterOwnerSerializer
+from ..serializers.auth_serializers import (
+    LoginSerializer,
+    RegisterOwnerSerializer,
+    RegisterEmployeeSerializer,
+    ChangePasswordSerializer,
+)
 from ..utils.disable_csrf import CsrfExemptSessionAuthentication
+from ..utils.permissions import IsCompanyAdmin
+
 
 class LoginView(APIView):
     authentication_classes = []
@@ -53,357 +60,232 @@ class LoginView(APIView):
                 "message": "Logged in successfully",
                 "user_id": user.id,
                 "name": user.username,
-            }
+                "role": user.userprofile.role,
+            },
+            status=200,
         )
 
 
 class RegisterOwnerView(APIView):
-    authentication_classes=[CsrfExemptSessionAuthentication]
+    authentication_classes = [CsrfExemptSessionAuthentication]
 
     def post(self, request):
         serializer = RegisterOwnerSerializer(data=request.data)
 
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
-        
+
         data = serializer.save()
         user = data["user"]
         company = data["company"]
 
-        return Response({
-            "message": "Company and owner created successfully",
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email
-            },
-            "company": {
-                "id": company.id,
-                "name": company.title,
-                "code": str(company.code)
-            }
-        })
-
-
-# REGISTRATION FOR COMPANY OWNERS / NEW USERS WHO CREATE COMPANY DURING REGISTRATION
-@csrf_exempt  # FOR TEMPORARY BASIC(DEV) CAN USE PROPER CSRF/AUTH
-def register_owner(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST method required"}, status=400)
-
-    try:
-        data = json.loads(request.body)
-
-        username = data.get("username")
-        email = data.get("email")
-        password = data.get("password")
-        company_name = data.get("company_name")
-        domain = data.get("domain")
-        phone = data.get("phone")
-        country = data.get("country")
-        address = data.get("address")
-        first_name = data.get("first_name")
-        last_name = data.get("last_name")
-
-        if User.objects.filter(username=username).exists():
-            return JsonResponse({"error": "Username already exists"}, status=400)
-
-        if User.objects.filter(email=email).exists():
-            return JsonResponse({"error": "Email already exists"}, status=400)
-
-        with transaction.atomic():
-
-            company = Company.objects.create(
-                title=company_name,
-                domain=domain,
-                phone=phone,
-                country=country,
-                address=address,
-            )
-
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-            )
-
-            profile, created = Userprofile.objects.get_or_create(user=user)
-            profile.role = "admin"
-            profile.company = company
-            profile.save()
-
-        return JsonResponse(
+        return Response(
             {
                 "message": "Company and owner created successfully",
-                "company_code": company.code,
+                "user": {"id": user.id, "username": user.username, "email": user.email},
+                "company": {
+                    "id": company.id,
+                    "name": company.title,
+                    "code": str(company.code),
+                },
             },
             status=201,
         )
 
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=400)
 
+class RegisterEmployeeView(APIView):
+    authentication_classes = [CsrfExemptSessionAuthentication]
 
-# REGISTRATION FOR EMPLOYEES USING COMPANY CODE
-@csrf_exempt  # DEV ONLY NEED CHANGE
-def register_employee(request, company_code):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=400)
+    def post(self, request):
+        serializer = RegisterEmployeeSerializer(data=request.data)
 
-    try:
-        data = json.loads(request.body)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
 
-        username = data.get("username")
-        email = data.get("email")
-        password = data.get("password")
-        first_name = data.get("first_name")
-        last_name = data.get("last_name")
+        data = serializer.save()
+        user = data["user"]
+        company = data["company"]
 
-        company = get_object_or_404(Company, code=company_code)
-
-        if User.objects.filter(username=username).exists():
-            return JsonResponse({"error": "Username already exists"}, status=400)
-
-        if User.objects.filter(email=email).exists():
-            return JsonResponse({"error": "Email already exists"}, status=400)
-
-        if not company:
-            return JsonResponse(
-                {"error": "Unauthorized request, invalid company code"}, status=401
-            )
-
-        with transaction.atomic():
-
-            user = User.objects.create_user(
-                username=username,
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                password=password,
-            )
-
-            profile, created = Userprofile.objects.get_or_create(user=user)
-            profile.role = "member"
-            profile.company = company
-            profile.save()
-
-        return JsonResponse(
+        return Response(
             {
-                "message": "Created employee user",
-                "company": company.title,
-                "role": "member",
+                "message": "Company and owner created successfully",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.userprofile.role,
+                },
+                "company": {
+                    "id": company.id,
+                    "name": company.title,
+                    "code": str(company.code),
+                },
             },
             status=201,
         )
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=400)
 
 
-# LOGINS USER WITH ANY ROLE
-@csrf_exempt  # DEV ONLY NEED CHANGE
-def login_user(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    data = json.loads(request.body)
-    username = data.get("username")
-    password = data.get("password")
+    def get(self, request):
+        user = request.user
+        profile = user.userprofile
+        company = profile.company
 
-    user = authenticate(request, username=username, password=password)
-
-    if user is not None:
-        login(request, user)
-        profile, created = Userprofile.objects.get_or_create(user=user)
-        return JsonResponse(
+        return Response(
             {
-                "message": "Login successfull",
+                "message": "Current user details fetched successfully",
+                "id": user.id,
                 "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
                 "role": profile.role,
-                "company": profile.company.title,
+                "avatar": profile.avatar,
+                "isEmailVerified": profile.is_emailverified,
+                "company": {
+                    "id": company.id,
+                    "name": company.title,
+                    "domain": company.domain,
+                },
             },
             status=200,
         )
-    else:
-        return JsonResponse({"error": "Invalid username or password"}, status=401)
 
+class LogoutView(APIView):
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [IsAuthenticated]
 
-# GETS CURRENT USER
-@login_is_required
-@csrf_exempt  # TEMP
-def get_current_user(request):
-    if request.method != "GET":
-        return JsonResponse({"error": "GET request required"}, status=400)
+    def post(self, request):
+        user = request.user
 
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
+        logout(request)
 
-    profile = Userprofile.objects.get(user=request.user)
+        return Response({"message": "User logged out successfully"}, status=200)
+    
 
-    return JsonResponse(
-        {
-            "message": "Current user fetched successfully",
-            "username": request.user.username,
-            "email": request.user.email,
-            "role": profile.role if profile else None,
-        }
-    )
+class ChangePasswordView(APIView):
+    authentication_classes=[CsrfExemptSessionAuthentication]
+    permission_classes=[IsAuthenticated]
 
+    def patch(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
 
-# LOGOUT FOR ALL USERS
-@login_is_required
-@csrf_exempt
-def logout_user(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        
+        user = request.user
 
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
+        # check old password
+        if not user.check_password(serializer.validated_data["old_password"]):
+            return Response({
+                "error": "Old password is invalid",
+            }, status=400)
 
-    logout(request)
+        # set new password
+        user.set_password(serializer.validated_data["new_password"])
+        user.save()
 
-    return JsonResponse({"message": "User logged out successfully"}, status=200)
-
-
-@role_required(["admin", "manager"])
-@csrf_exempt
-def delete_user(request, user_id):
-    if request.method != "DELETE":
-        return JsonResponse({"error": "DELETE request required"}, status=405)
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-
-    curr_profile = Userprofile.objects.filter(user=request.user).first()
-
-    if not curr_profile:
-        return JsonResponse({"error": "Profile not found"}, status=403)
-
-    try:
-        user_to_delete = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return JsonResponse({"error": "User not found"}, status=404)
-
-    if curr_profile.role != "admin":
-        if user_to_delete == request.user:
-            return JsonResponse({"error": "You cannot delete yourself"}, status=400)
-
-    if user_to_delete.userprofile.company != curr_profile.company:
-        return JsonResponse(
-            {"error": "You cannot delete other company users"}, status=400
-        )
-
-    user_to_delete.is_active = False
-    user_to_delete.save()
-
-    return JsonResponse({"message": "User soft deleted successfully"})
-
-
-@role_required(["admin"])
-@csrf_exempt  # TEMPORARY
-def reactivate_user(request, user_id):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-
-    curr_profile = Userprofile.objects.filter(user=request.user).first()
-
-    if not curr_profile:
-        return JsonResponse({"error": "Profile not found"}, status=403)
-
-    try:
-        user_to_reactivate = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return JsonResponse({"error": "User not found"}, status=404)
-
-    if user_to_reactivate.userprofile.company != curr_profile.company:
-        return JsonResponse(
-            {"error": "You cannot reactivate user of other companies"}, status=401
-        )
-
-    user_to_reactivate.is_active = True
-    user_to_reactivate.save()
-
-    return JsonResponse(
-        {
-            "message": "User reactivated successfully",
-            "username": user_to_reactivate.username,
-            "company": user_to_reactivate.userprofile.company.title,
-            "role": user_to_reactivate.userprofile.role,
-        }
-    )
-
-
-@role_required(["admin"])
-@csrf_exempt
-def change_roles(request, user_id):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=405)
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-
-    curr_profile = Userprofile.objects.filter(user=request.user).first()
-    if not curr_profile:
-        return JsonResponse({"error": "Profile not found"}, status=403)
-
-    data = json.loads(request.body)
-    role = data.get("role")
-    try:
-        if role not in ["admin", "manager", "member"]:
-            return JsonResponse({"error": "Role does not exists"}, status=400)
-
-        user_change_role = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return JsonResponse({"error": "User does not exists"}, status=404)
-
-    if user_change_role.userprofile.company != curr_profile.company:
-        return JsonResponse(
-            {"error": "You cannot change the role of another company's user"},
-            status=401,
-        )
-
-    user_change_role.userprofile.role = role
-    user_change_role.save()
-
-    return JsonResponse(
-        {
-            "message": "User role changed successfully",
-            "username": user_change_role.username,
-            "company": user_change_role.userprofile.company.title,
-            "role": user_change_role.userprofile.role,
-        }
-    )
-
-
-@login_is_required
-@require_http_methods(["POST"])
-@csrf_exempt
-def change_password(request):
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-
-    data = json.loads(request.body)
-    old_password = data.get("old_password")
-    new_password = data.get("new_password")
-
-    if not old_password or not new_password:
-        return JsonResponse({"error": "Both password required"}, status=400)
-
-    user = authenticate(request, username=request.user.username, password=old_password)
-
-    if not user:
-        return JsonResponse({"error": "Invalid old password"}, status=400)
-
-    user.set_password(new_password)
-    user.save()
-
-    return JsonResponse(
-        {
+        return Response({
             "message": "Password changed successfully",
-        }
-    )
+            "username": user.username,
+            "company": user.userprofile.company.title,
+            "role": user.userprofile.role,
+        })
+
+"""
+---------------------- USER MANAGEMENT VIEWS ----------------------
+"""    
+class UpdateUserRoleView(APIView):
+    permission_classes = [IsAuthenticated, IsCompanyAdmin]
+    authentication_classes=[CsrfExemptSessionAuthentication]
+
+    def patch(self, request, id):
+        curr_profile = request.user.userprofile
+
+        # check if admin
+        if curr_profile.role != "admin":
+            return Response({"error": "Only admins can access this page"}, status=403)
+        
+        try:
+            profile = Userprofile.objects.select_related("user").get(user_id=id, company=curr_profile.company)
+        except Userprofile.DoesNotExist:
+            return Response({
+                "error": "User profile does not exists",
+            }, status=404)
+        
+        new_role = request.data.get("role")
+
+        if new_role not in ["admin", "manager", "member"]:
+            return Response({"error": "Invalid role"}, status=400)
+        
+        profile.role = new_role
+        profile.save()
+
+        return Response({
+            "message": "Role updated successfully",
+            "user": profile.user.username,
+            "role": profile.role
+        })
+
+class RemoveCompanyUserView(APIView):
+    permission_classes=[IsAuthenticated, IsCompanyAdmin]
+    authentication_classes=[CsrfExemptSessionAuthentication]
+
+    def delete(self, request, id):
+        curr_profile = request.user.userprofile
+        
+        # check if admin
+        if curr_profile.role != "admin":
+            return Response({"error": "Only admins can access this page"}, status=403)
+
+        try:
+            profile = Userprofile.objects.select_related("user").get(user_id=id, company=curr_profile.company)
+        except Userprofile.DoesNotExist:
+            return Response({
+                "error": "User profile does not exists",
+            }, status=404)
+
+        # prevent deleting urself
+        if request.user == profile.user:
+            return Response({"error": "You cannot remove yourself"}, status=400)
+        
+        profile.user.is_active = False
+        
+        return Response({"message": "User removed successfully"}, status=200)
+    
+
+class CompanyUsersView(APIView):
+    permission_classes = [IsAuthenticated, IsCompanyAdmin]
+
+    def get(self, request):
+        user = request.user
+        profile = user.userprofile
+        company = profile.company
+
+        if profile.role != "admin":
+            return Response({"error": "Only admins can view this page"}, status=403)
+
+        users = Userprofile.objects.filter(company=company).select_related("user")
+
+        data = []
+
+        for p in users:
+            u = p.user
+            data.append({
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "last_login": u.last_login,
+                "role": p.role,
+            })
+        
+        return Response({
+            "message": "Company users fetched successfullly",
+            "company_name": company.title,
+            "users": data
+        }, status=200)
+

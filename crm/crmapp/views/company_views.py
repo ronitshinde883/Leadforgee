@@ -33,26 +33,18 @@ class CompanyAPIView(APIView):
     # GET /api/company/ 
     def get(self, request):
         company = request.user.userprofile.company
-        users = company.users.select_related("user")
 
         if company.is_active == False:
             return Response({"error": "Company does not exists"}, status=404)
 
-        users_data = [
-            {
-                "id": profile.user.id,
-                "username": profile.user.username,
-                "email": profile.user.email,
-                "role": profile.role,
-            }
-            for profile in users
-        ]
-
         data = {
             "id": company.id,
             "name": company.title,
+            "domain": company.domain,
+            "phone": company.phone,
+            "address": company.address,
+            "country": company.country,
             "created_at": company.created_at,
-            "users": users_data
         }
 
         return Response({"message": "Company details fetched successfully", "data": data}, status=200);
