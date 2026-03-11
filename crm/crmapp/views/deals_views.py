@@ -162,7 +162,7 @@ class DealReactivateView(View):
 
         except Deal.DoesNotExist:
             return JsonResponse({"error": "Deal does not exist"}, status=404)
-# @login_is_required
+#22# @login_is_required
 # @csrf_exempt
 # def create_deal(request):
 #     if request.method != "POST":
