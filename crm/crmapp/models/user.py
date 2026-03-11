@@ -17,9 +17,11 @@ class Userprofile(models.Model):
     ]
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="member", db_index=True)
 
+    class Meta:
+        ordering = ["id"]
+
     def __str__(self):
         return self.user.username
-
 
 # REMOVED FIELDS
 # fullname=models.CharField(max_length=100)

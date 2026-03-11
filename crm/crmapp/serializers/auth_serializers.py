@@ -2,6 +2,7 @@ from django.contrib.auth import authenticate
 from django.db import transaction
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
 
 from ..models.common import Company
 from ..models.user import Userprofile
@@ -23,7 +24,7 @@ class RegisterOwnerResponseSerializer(serializers.Serializer):
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)   # can add validators=[validate_password]
 
     def validate(self, data):
         user = authenticate(username=data["username"], password=data["password"])
@@ -34,11 +35,24 @@ class LoginSerializer(serializers.Serializer):
         data["user"] = user
         return data
 
-class RegisterOwnerSerializer(serializers.Serializer):
+class BaseRegisterSerializer(serializers.Serializer):
     username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)   # can add validators=[validate_password]
     email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
 
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already exists")
+        return value
+    
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists")
+        return value
+
+class RegisterOwnerSerializer(BaseRegisterSerializer):
     company = CompanySerializer()
 
     @transaction.atomic
@@ -52,7 +66,9 @@ class RegisterOwnerSerializer(serializers.Serializer):
         user = User.objects.create_user(
             username=validated_data["username"],
             password=validated_data["password"],
-            email=validated_data["email"]
+            email=validated_data["email"],
+            first_name=validated_data["first_name"],
+            last_name=validated_data["last_name"],
         )
 
         # create user profile
@@ -66,4 +82,39 @@ class RegisterOwnerSerializer(serializers.Serializer):
             "user": user,
             "company": company
         }
+    
+class RegisterEmployeeSerializer(BaseRegisterSerializer):
+    code = serializers.CharField()
+
+    @transaction.atomic
+    def create(self, validated_data):
+        code = validated_data.pop("code")
+
+        try:
+            company = Company.objects.get(code=code)
+        except Company.DoesNotExist:
+            raise serializers.ValidationError("Invalid invite code")
+        
+        user = User.objects.create_user(
+            username=validated_data["username"],
+            password=validated_data["password"],
+            email=validated_data["email"],
+            first_name=validated_data["first_name"],
+            last_name=validated_data["last_name"],
+        )
+
+        Userprofile.objects.create(
+            user=user,
+            company=company,
+            role="member"
+        )
+
+        return {
+            "user": user,
+            "company": company
+        }
+    
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(write_only=True)   # validators=[validate_password]
     

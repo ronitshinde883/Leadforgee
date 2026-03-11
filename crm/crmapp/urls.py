@@ -7,14 +7,15 @@ from .views.test_views import home, hello
 from .views.auth_views import (
     LoginView,
     RegisterOwnerView,
-    register_employee,
-    login_user,
-    get_current_user,
-    logout_user,
+    RegisterEmployeeView,
+    MeView,
+    LogoutView,
+    CompanyUsersView,
+    UpdateUserRoleView,
+    ChangePasswordView,
+    RemoveCompanyUserView,
     delete_user,
     reactivate_user,
-    change_roles,
-    change_password,
 )
 
 from .views.company_views import CompanyAPIView
@@ -54,17 +55,15 @@ urlpatterns = [
 
     # AUTH URLS
     path("auth/register", RegisterOwnerView.as_view()),
-    path(
-        "auth/register-employee/<str:company_code>",
-        register_employee,
-        name="register_employee",
-    ),
+    path("auth/register-employee",RegisterEmployeeView.as_view()),
     path("auth/login", LoginView.as_view()),
-    path("auth/me", get_current_user, name="get_current_user"),
-    path("auth/logout", logout_user, name="logout_user"),
-    path("auth/<str:user_id>/delete", delete_user, name="delete_user"),
-    path("auth/<str:user_id>/reactivate", reactivate_user, name="reactivate_user"),   # DEV ONLY
-    path("auth/<str:user_id>/change-role", change_roles, name="change_roles"),
-    path("auth/change-password", change_password, name="change-pass")
+    path("auth/me", MeView.as_view()),
+    path("auth/logout", LogoutView.as_view()),
+    path("auth/<str:user_id>/delete", RemoveCompanyUserView, name="delete_user"),
+    # path("auth/<str:user_id>/reactivate", reactivate_user, name="reactivate_user"),   # DEV ONLY
+    path("auth/change-password", ChangePasswordView.as_view()),
 
+    # COMPANY URLS
+    path("company/users", CompanyUsersView.as_view()),
+    path("company/user/<str:id>/role", UpdateUserRoleView.as_view()),
 ]
