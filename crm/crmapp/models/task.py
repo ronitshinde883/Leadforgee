@@ -33,6 +33,7 @@ class Task(models.Model):
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICE, default="pending", db_index=True
     )
+    # change to due_date
     duedate = models.DateField(db_index=True)
     attachement = models.URLField(blank=True, null=True)
     title = models.CharField(max_length=128)  # NULL TO BE REMOVED LATER

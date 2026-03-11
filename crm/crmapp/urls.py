@@ -14,8 +14,8 @@ from .views.auth_views import (
     UpdateUserRoleView,
     ChangePasswordView,
     RemoveCompanyUserView,
-    delete_user,
-    reactivate_user,
+    # delete_user,
+    # reactivate_user,
 )
 
 from .views.company_views import CompanyAPIView
@@ -42,6 +42,10 @@ from .views.deals_views import (
     reactivate_deal
 )
 
+from .views.activity_view import (
+    ActivityLogView
+)
+
 router = DefaultRouter()
 router.register(r'leads', LeadViewSet, basename="leads")
 router.register(r'tasks', TaskViewSet, basename="tasks")
@@ -59,11 +63,14 @@ urlpatterns = [
     path("auth/login", LoginView.as_view()),
     path("auth/me", MeView.as_view()),
     path("auth/logout", LogoutView.as_view()),
-    path("auth/<str:user_id>/delete", RemoveCompanyUserView, name="delete_user"),
+    path("auth/<str:user_id>/delete", RemoveCompanyUserView.as_view()),
     # path("auth/<str:user_id>/reactivate", reactivate_user, name="reactivate_user"),   # DEV ONLY
     path("auth/change-password", ChangePasswordView.as_view()),
 
     # COMPANY URLS
     path("company/users", CompanyUsersView.as_view()),
     path("company/user/<str:id>/role", UpdateUserRoleView.as_view()),
+
+    # ACTIVITY URLS
+    path("activity", ActivityLogView.as_view()),
 ]
