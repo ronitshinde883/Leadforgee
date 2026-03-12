@@ -11,6 +11,8 @@ from rest_framework import status
 
 from ..serializers.task_serializers import TaskSerializer
 from ..utils.disable_csrf import CsrfExemptSessionAuthentication
+from ..services.activity_service import log_activity
+
 
 # TASK VIEWS
 class TaskViewSet(ModelViewSet):
@@ -27,12 +29,10 @@ class TaskViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         company = user.userprofile.company
-        return (
-            Task.objects
-                .filter(company=company)
-                .select_related("assigned_by", "company")
+        return Task.objects.filter(company=company).select_related(
+            "assigned_by", "company"
         )
-    
+
     # GET /api/tasks/
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -48,41 +48,46 @@ class TaskViewSet(ModelViewSet):
             task = Task.objects.get(id=id, company=company)
         except Task.DoesNotExist:
             return Response({"error": "Task does not exists"}, status=404)
-        
+
         serializer = TaskSerializer(task)
 
-        return Response({
-            "message": "Fetched task successfully",
-            "task": serializer.data
-            # "assignedTo": task.assigned_to.username
-        }, status=200)
+        return Response(
+            {
+                "message": "Fetched task successfully",
+                "task": serializer.data,
+                # "assignedTo": task.assigned_to.username
+            },
+            status=200,
+        )
 
+    """
+        NEED TO ADD VALIDATION CHECKS TO MAKE SURE IF THE TASK ASSIGNED FOR THE MODEL IS IN THAT COMPANY OR NOT, ALSO IF IT EXISTS OR NOT
+    """
     # POST /api/tasks/
     def create(self, request):
         user = request.user
         company = user.userprofile.company
 
-        related_model = self.request.data.get("related_model")
-        related_id = self.request.data.get("related_id")
-
-        content_type = ContentType.objects.get(
-            app_label="crmapp",
-            model=related_model
-        )
-
         serializer = TaskSerializer(data=request.data)
 
         if serializer.is_valid():
-            task = serializer.save(assigned_by=user, company=company, content_type=content_type, object_id=related_id, status="pending")
-        
-            return Response(
-                {
-                    "message": "Created task successfully",
-                    "task_id": task.id
-                },
-                status=201
+            task = serializer.save(
+                assigned_by=user,
+                company=company,
+                status="pending",
             )
-        
+            log_activity(
+                user=user,
+                company=company,
+                action="create",
+                obj=task,
+                description=f"Created {task.title} task",
+            )
+
+            return Response(
+                {"message": "Created task successfully", "task_id": task.id}, status=201
+            )
+
         return Response(serializer.errors, status=400)
 
     # PATCH /api/tasks/{id}
@@ -93,18 +98,16 @@ class TaskViewSet(ModelViewSet):
         try:
             task = Task.objects.get(id=id, company=company)
         except Task.DoesNotExist:
-            return Response({
-                "error": "Lead does not exists"
-            }, status=404)
-        
+            return Response({"error": "Lead does not exists"}, status=404)
+
         serializer = TaskSerializer(task, data=request.data, partial=True)
 
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Task updated successfully"})
-    
+
         return Response(serializer.errors, status=400)
-    
+
     # LATER
     def update(self, request, id=None):
         pass
@@ -117,17 +120,11 @@ class TaskViewSet(ModelViewSet):
         try:
             task = Task.objects.get(id=id, company=company)
         except Task.DoesNotExist:
-            return Response({
-                "error": "Lead does not exists"
-            }, status=404)
-        
+            return Response({"error": "Lead does not exists"}, status=404)
+
         task.delete()
-        
-        return Response({
-            "message": "Task deleted successfully"
-        }, status=200)
 
-
+        return Response({"message": "Task deleted successfully"}, status=200)
 
 
 """
